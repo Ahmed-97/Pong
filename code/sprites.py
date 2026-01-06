@@ -12,6 +12,10 @@ class Paddle(pygame.sprite.Sprite):
         self.image = pygame.Surface(SIZE['paddle'], pygame.SRCALPHA)
         pygame.draw.rect(self.image, COLORS['paddle'], pygame.Rect((0, 0), SIZE['paddle']), 0, 4)
 
+        # shadow surf
+        self.shadow_surf = self.image.copy()
+        pygame.draw.rect(self.shadow_surf, COLORS['paddle shadow'], pygame.Rect((0, 0), SIZE['paddle']), 0, 4)
+
         # rect and movement
         self.rect = self.image.get_rect(center=POS['player'])
         self.old_rect = self.rect.copy()
@@ -50,24 +54,35 @@ class Opponent(Paddle):
 
 
 class Ball(pygame.sprite.Sprite):
-    def __init__(self, groups, paddle_sprites):
+    def __init__(self, groups, paddle_sprites, update_score):
         super().__init__(groups)
         self.paddle_sprites = paddle_sprites
+        self.update_score = update_score
 
         # image
         self.image = pygame.Surface(SIZE['ball'], pygame.SRCALPHA)
         pygame.draw.circle(self.image, COLORS['ball'], (SIZE['ball'][0] / 2, SIZE['ball'][1] / 2), SIZE['ball'][0] / 2)
+
+        # shadow surf
+        self.shadow_surf = self.image.copy()
+        pygame.draw.circle(self.image, COLORS['ball shadow'],
+                           (SIZE['ball'][0] / 2, SIZE['ball'][1] / 2), SIZE['ball'][0] / 2)
 
         # rect and movement
         self.rect = self.image.get_rect(center=(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2))
         self.old_rect = self.rect.copy()
         self.direction = pygame.Vector2(choice((1, -1)), uniform(0.7, 0.8) * choice((-1, 1)))
         self.speed = SPEED['ball']
+        self.speed_modifier = 0
+
+        # timer
+        self.start_time = pygame.time.get_ticks()
+        self.duration = 1200
 
     def move(self, dt):
-        self.rect.x += self.direction.x * self.speed * dt
+        self.rect.x += self.direction.x * self.speed * dt * self.speed_modifier
         self.collision('horizontal')
-        self.rect.y += self.direction.y * self.speed * dt
+        self.rect.y += self.direction.y * self.speed * dt * self.speed_modifier
         self.collision('vertical')
 
     def collision(self, direction):
@@ -97,15 +112,23 @@ class Ball(pygame.sprite.Sprite):
             self.rect.bottom = WINDOW_HEIGHT
             self.direction.y *= -1
 
-        if self.rect.right >= WINDOW_WIDTH:
-            self.rect.right = WINDOW_WIDTH
-            self.direction.x *= -1
+        if self.rect.right >= WINDOW_WIDTH or self.rect.left <= 0:
+            self.update_score('player' if self.rect.x  < WINDOW_WIDTH / 2 else 'opponent')
+            self.reset()
 
-        if self.rect.left <= 0:
-            self.rect.left = 0
-            self.direction.x *= -1
+    def reset(self):
+        self.rect.center = (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
+        self.direction = pygame.Vector2(choice((1, -1)), uniform(0.7, 0.8) * choice((-1, 1)))
+        self.start_time = pygame.time.get_ticks()
+
+    def timer(self):
+        if pygame.time.get_ticks() - self.start_time >= self.duration:
+            self.speed_modifier = 1
+        else:
+            self.speed_modifier = 0
 
     def update(self, dt):
         self.old_rect = self.rect.copy()
+        self.timer()
         self.move(dt)
         self.wall_collision()
